@@ -1,6 +1,6 @@
 import React from 'react';
 import { RadialBarChart, RadialBar, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from 'recharts';
-import { ATSAnalysis } from '../types';
+import { ATSAnalysis, CareerMatch } from '../types';
 
 interface AnalysisChartsProps {
   data: ATSAnalysis;
@@ -60,5 +60,31 @@ export const CategoryBreakdown: React.FC<{ data: ATSAnalysis }> = ({ data }) => 
         </Bar>
       </BarChart>
     </ResponsiveContainer>
+  );
+};
+
+export const CareerMatchList: React.FC<{ matches: CareerMatch[] }> = ({ matches }) => {
+  return (
+    <div className="space-y-4">
+      {matches.map((match, index) => (
+        <div key={index} className="space-y-1">
+          <div className="flex justify-between items-end">
+            <div>
+                <span className="block text-sm font-bold text-slate-700">{match.role}</span>
+                <span className="block text-xs text-slate-500">{match.industry}</span>
+            </div>
+            <span className="text-sm font-bold text-blue-600">{match.matchPercentage}%</span>
+          </div>
+          <div className="w-full bg-slate-100 rounded-full h-2.5">
+            <div 
+              className={`h-2.5 rounded-full ${
+                match.matchPercentage > 85 ? 'bg-green-500' : match.matchPercentage > 60 ? 'bg-yellow-500' : 'bg-slate-400'
+              }`} 
+              style={{ width: `${match.matchPercentage}%` }}
+            ></div>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 };

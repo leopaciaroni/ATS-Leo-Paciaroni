@@ -1,11 +1,19 @@
 import React, { useState } from 'react';
-import { Upload, FileText, CheckCircle, AlertTriangle, Briefcase, ArrowRight, RefreshCw, ChevronLeft } from 'lucide-react';
-import { AppState, ATSAnalysis, OptimizationResult, TailoredResult } from './types';
+import { Upload, FileText, CheckCircle, AlertTriangle, Briefcase, ArrowRight, RefreshCw, ChevronLeft, Maximize2, Target, LogOut } from 'lucide-react';
+import { AppState, ATSAnalysis, OptimizationResult, TailoredResult, User } from './types';
 import * as GeminiService from './services/gemini';
-import { ScoreGauge, CategoryBreakdown } from './components/AnalysisCharts';
+import { ScoreGauge, CategoryBreakdown, CareerMatchList } from './components/AnalysisCharts';
 import { CVDisplay } from './components/CVDisplay';
+import { AnalysisModal } from './components/AnalysisModal';
+import { AuthScreen } from './components/AuthScreen';
+
+const MIN_CV_LENGTH = 100;
 
 const App: React.FC = () => {
+  // Auth State
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+
+  // App Logic State
   const [currentState, setCurrentState] = useState<AppState>(AppState.INPUT);
   const [cvText, setCvText] = useState<string>('');
   const [analysis, setAnalysis] = useState<ATSAnalysis | null>(null);
@@ -17,19 +25,34 @@ const App: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Modal State
+  const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
+
   const handleAnalyze = async () => {
-    if (!cvText.trim()) return;
+    const trimmedText = cvText.trim();
+
+    // Strict Validations
+    if (!trimmedText) {
+      setErrorMsg("El campo no puede estar vacío. Por favor, ingresa el texto de tu CV.");
+      return;
+    }
+
+    if (trimmedText.length < MIN_CV_LENGTH) {
+      setErrorMsg(`El contenido es demasiado corto (${trimmedText.length} caracteres). Se requiere un mínimo de ${MIN_CV_LENGTH} caracteres para un análisis ATS preciso.`);
+      return;
+    }
+
     setIsProcessing(true);
     setErrorMsg(null);
     setCurrentState(AppState.ANALYZING);
 
     try {
       // 1. Analyze
-      const analysisResult = await GeminiService.analyzeCV(cvText);
+      const analysisResult = await GeminiService.analyzeCV(trimmedText);
       setAnalysis(analysisResult);
       
       // 2. Auto-optimize
-      const optimizedResult = await GeminiService.optimizeCV(cvText, analysisResult);
+      const optimizedResult = await GeminiService.optimizeCV(trimmedText, analysisResult);
       setOptimizedCV(optimizedResult);
 
       setCurrentState(AppState.RESULTS);
@@ -58,6 +81,20 @@ const App: React.FC = () => {
     }
   };
 
+  const handleLogout = () => {
+    setCurrentUser(null);
+    // Reset App State
+    setCurrentState(AppState.INPUT);
+    setCvText('');
+    setAnalysis(null);
+    setOptimizedCV(null);
+  };
+
+  // If not logged in, show Auth Screen
+  if (!currentUser) {
+    return <AuthScreen onLogin={setCurrentUser} />;
+  }
+
   // Render Functions
 
   const renderInput = () => (
@@ -71,26 +108,46 @@ const App: React.FC = () => {
           <p className="text-slate-500 mt-2">Pega el texto de tu CV para un análisis ATS profundo.</p>
         </div>
 
-        <textarea
-          className="w-full h-64 p-4 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none bg-slate-50 font-mono text-sm"
-          placeholder="Pega aquí el contenido de tu CV (texto plano)..."
-          value={cvText}
-          onChange={(e) => setCvText(e.target.value)}
-        />
+        <div className="relative">
+          <textarea
+            className={`w-full h-64 p-4 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none bg-slate-50 font-mono text-sm ${
+              errorMsg ? 'border-red-300 ring-1 ring-red-100' : 'border-slate-200'
+            }`}
+            placeholder="Pega aquí el contenido de tu CV (texto plano)..."
+            value={cvText}
+            onChange={(e) => {
+              setCvText(e.target.value);
+              if (errorMsg) setErrorMsg(null);
+            }}
+          />
+          <div className={`absolute bottom-4 right-4 text-xs font-medium px-2 py-1 rounded-md transition-colors ${
+            cvText.trim().length > 0 && cvText.trim().length < MIN_CV_LENGTH
+              ? 'bg-amber-100 text-amber-700'
+              : 'bg-slate-100 text-slate-500'
+          }`}>
+            {cvText.trim().length} / {MIN_CV_LENGTH} min
+          </div>
+        </div>
 
-        <div className="mt-6 flex justify-end">
+        <div className="mt-6 flex flex-col items-end gap-3">
           <button
             onClick={handleAnalyze}
-            disabled={!cvText.trim() || isProcessing}
-            className={`flex items-center gap-2 px-8 py-4 rounded-xl text-white font-semibold transition-all shadow-lg hover:shadow-xl ${
-              !cvText.trim() ? 'bg-slate-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+            disabled={isProcessing}
+            className={`flex items-center gap-2 px-8 py-4 rounded-xl text-white font-semibold transition-all shadow-lg hover:shadow-xl w-full sm:w-auto justify-center ${
+              isProcessing ? 'bg-slate-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
             }`}
           >
             {isProcessing ? 'Procesando...' : 'Analizar y Optimizar'}
             {!isProcessing && <ArrowRight size={20} />}
           </button>
+          
+          {errorMsg && (
+            <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 px-4 py-3 rounded-lg w-full border border-red-100 animate-in fade-in slide-in-from-top-1">
+              <AlertTriangle size={18} className="flex-shrink-0" />
+              {errorMsg}
+            </div>
+          )}
         </div>
-        {errorMsg && <p className="mt-4 text-red-500 text-center text-sm">{errorMsg}</p>}
       </div>
     </div>
   );
@@ -116,6 +173,18 @@ const App: React.FC = () => {
         
         {/* Left Column: Analysis & Stats */}
         <div className="lg:col-span-4 flex flex-col gap-6 overflow-y-auto pr-2 pb-10">
+            {/* Header for Analysis with Expand Button */}
+            <div className="flex items-center justify-between">
+                <h2 className="text-lg font-bold text-slate-700">Reporte de Análisis</h2>
+                <button 
+                  onClick={() => setIsAnalysisModalOpen(true)}
+                  className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 font-medium px-3 py-1 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+                >
+                  <Maximize2 size={16} />
+                  Ampliar
+                </button>
+            </div>
+
             {/* Score Card */}
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                 <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
@@ -123,64 +192,64 @@ const App: React.FC = () => {
                 </h3>
                 <ScoreGauge score={analysis.overallScore} />
                 <CategoryBreakdown data={analysis} />
-                <div className="mt-4 p-3 bg-slate-50 rounded-lg text-sm text-slate-600">
+                <div className="mt-4 p-3 bg-slate-50 rounded-lg text-sm text-slate-600 line-clamp-3">
                    {analysis.summary}
                 </div>
             </div>
 
-            {/* Critical Issues */}
+            {/* Career Matches (Job Fit) */}
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                 <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                    <AlertTriangle size={20} className="text-amber-500" /> Problemas Críticos
+                    <Target size={20} className="text-indigo-600" /> Cargos Sugeridos
                 </h3>
-                <ul className="space-y-2">
-                    {analysis.criticalIssues.map((issue, idx) => (
-                        <li key={idx} className="flex items-start gap-2 text-sm text-slate-700">
-                            <span className="text-red-500 mt-1">•</span> {issue}
-                        </li>
-                    ))}
-                </ul>
+                <CareerMatchList matches={analysis.careerMatches} />
             </div>
 
-            {/* Keywords Analysis */}
+            {/* Keywords Analysis (Preview) */}
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                 <h3 className="text-lg font-bold text-slate-800 mb-4">Palabras Clave</h3>
                 <div className="mb-4">
-                    <p className="text-xs text-slate-500 uppercase font-bold mb-2">Encontradas</p>
+                    <p className="text-xs text-slate-500 uppercase font-bold mb-2">Encontradas (Top)</p>
                     <div className="flex flex-wrap gap-2">
-                        {analysis.foundKeywords.map((k, i) => (
+                        {analysis.foundKeywords.slice(0, 5).map((k, i) => (
                             <span key={i} className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full font-medium">{k}</span>
                         ))}
-                    </div>
-                </div>
-                <div>
-                    <p className="text-xs text-slate-500 uppercase font-bold mb-2">Faltantes Sugeridas</p>
-                    <div className="flex flex-wrap gap-2">
-                        {analysis.missingKeywords.map((k, i) => (
-                            <span key={i} className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full font-medium">{k}</span>
-                        ))}
+                        {analysis.foundKeywords.length > 5 && (
+                           <span className="px-2 py-1 bg-slate-100 text-slate-500 text-xs rounded-full font-medium">+{analysis.foundKeywords.length - 5}</span>
+                        )}
                     </div>
                 </div>
             </div>
-
-             <button
-              onClick={() => setCurrentState(AppState.TAILORING)}
-              className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-lg transition-colors flex items-center justify-center gap-2"
-            >
-              <Briefcase size={20} />
-              Personalizar para Empleo
-            </button>
         </div>
 
-        {/* Right Column: Optimized CV */}
+        {/* Right Column: Optimized CV & Tailor Action */}
         <div className="lg:col-span-8 flex flex-col h-full">
-            <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl mb-4 text-blue-800 text-sm">
-                <strong>Estrategia de Optimización:</strong> {optimizedCV.rationale}
+            {/* Primary Action Button placed prominently at the top */}
+            <div className="mb-4 flex gap-4 items-center">
+                <div className="flex-1 bg-blue-50 border border-blue-100 p-3 rounded-xl text-blue-800 text-sm">
+                    <strong>Estrategia:</strong> {optimizedCV.rationale}
+                </div>
+                <button
+                    onClick={() => setCurrentState(AppState.TAILORING)}
+                    className="flex-shrink-0 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-md transition-all flex items-center gap-2 hover:scale-105"
+                >
+                    <Briefcase size={20} />
+                    Personalizar para Empleo
+                    <ArrowRight size={18} />
+                </button>
             </div>
+
             <div className="flex-1 min-h-0">
                 <CVDisplay markdown={optimizedCV.markdownCV} title="Versión Optimizada para ATS" />
             </div>
         </div>
+
+        {/* Modal */}
+        <AnalysisModal 
+            isOpen={isAnalysisModalOpen} 
+            onClose={() => setIsAnalysisModalOpen(false)} 
+            analysis={analysis} 
+        />
       </div>
     );
   };
@@ -251,12 +320,28 @@ const App: React.FC = () => {
               ATS Master Pro
             </h1>
           </div>
-          <div className="flex gap-4 text-sm font-medium text-slate-500">
-            <span className={currentState === AppState.INPUT ? 'text-blue-600' : ''}>1. Cargar</span>
-            <span className="text-slate-300">/</span>
-            <span className={currentState === AppState.RESULTS ? 'text-blue-600' : ''}>2. Análisis</span>
-            <span className="text-slate-300">/</span>
-            <span className={currentState === AppState.TAILORING ? 'text-blue-600' : ''}>3. Personalizar</span>
+          
+          <div className="flex items-center gap-6">
+            <div className="flex gap-4 text-sm font-medium text-slate-500">
+                <span className={currentState === AppState.INPUT ? 'text-blue-600' : ''}>1. Cargar</span>
+                <span className="text-slate-300">/</span>
+                <span className={currentState === AppState.RESULTS ? 'text-blue-600' : ''}>2. Análisis</span>
+                <span className="text-slate-300">/</span>
+                <span className={currentState === AppState.TAILORING ? 'text-blue-600' : ''}>3. Personalizar</span>
+            </div>
+
+            <div className="h-6 w-px bg-slate-200"></div>
+
+            <div className="flex items-center gap-3">
+                <span className="text-sm text-slate-600 font-medium hidden sm:block">Hola, {currentUser.name}</span>
+                <button 
+                    onClick={handleLogout}
+                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
+                    title="Cerrar Sesión"
+                >
+                    <LogOut size={18} />
+                </button>
+            </div>
           </div>
         </div>
       </header>

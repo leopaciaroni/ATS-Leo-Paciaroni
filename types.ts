@@ -5,6 +5,12 @@ export enum AppState {
   TAILORING = 'TAILORING'
 }
 
+export interface CareerMatch {
+  role: string;
+  industry: string;
+  matchPercentage: number;
+}
+
 export interface ATSAnalysis {
   overallScore: number;
   keywordMatch: number;
@@ -14,6 +20,7 @@ export interface ATSAnalysis {
   missingKeywords: string[];
   criticalIssues: string[];
   improvementSuggestions: string[];
+  careerMatches: CareerMatch[];
   summary: string;
 }
 
@@ -26,4 +33,20 @@ export interface TailoredResult {
   markdownCV: string;
   matchScore: number;
   changesMade: string[];
+}
+
+// Auth Types
+export interface User {
+  email: string;
+  password?: string;
+  role: 'admin' | 'user';
+  name: string;
+}
+
+export interface AccessRequest {
+  id: string;
+  email: string;
+  name: string;
+  date: string;
+  status: 'pending' | 'approved' | 'rejected';
 }
